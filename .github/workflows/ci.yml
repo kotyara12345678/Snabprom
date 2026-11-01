@@ -1,0 +1,78 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-and-build:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck & production build
+        run: npm run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
+
+  docker:
+    name: Docker build & scan
+    runs-on: ubuntu-latest
+    needs: lint-and-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: snabpromtechmontazh-landing:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test container
+        run: |
+          docker run -d --name smoke -p 8080:80 snabpromtechmontazh-landing:ci
+          for i in $(seq 1 15); do
+            if curl -fsS http://localhost:8080/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8080/healthz
+          curl -fsS http://localhost:8080/ | grep -qi "<!doctype html"
+          docker rm -f smoke
+
+  deploy-placeholder:
+    name: Deploy (placeholder)
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Deployment note
+        run: |
+          echo "Здесь подключается деплой на целевой сервер/реестр:"
+          echo "  - docker push <registry>/snabpromtechmontazh-landing:${{ github.sha }}"
+          echo "  - ssh deploy 'docker compose pull && docker compose up -d'"
+          echo "Заполните шаги под ваш контур после выбора хостинга."

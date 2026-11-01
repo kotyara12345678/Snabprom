@@ -1,0 +1,144 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  /* Графитовая база */
+  --color-graphite-950: #08090b;
+  --color-graphite-900: #0a0d0f;
+  --color-graphite-850: #101417;
+  --color-graphite-800: #161b1f;
+  --color-graphite-700: #1f262b;
+  --color-graphite-600: #2b343a;
+
+  /* Холодный стальной серый */
+  --color-steel-600: #4a555d;
+  --color-steel-500: #5f6b74;
+  --color-steel-400: #8a959d;
+  --color-steel-300: #b4bcc2;
+  --color-steel-200: #d5dade;
+  --color-steel-100: #e8ebed;
+  --color-steel-50: #f4f6f7;
+
+  /* Промышленный оранжевый (медь) */
+  --color-copper-700: #9c3f0c;
+  --color-copper-600: #c2500f;
+  --color-copper-500: #e2601a;
+  --color-copper-400: #f07a38;
+  --color-copper-300: #f8a071;
+
+  --color-paper: #f6f7f8;
+
+  --ease-industrial: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 84px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: #ffffff;
+    color: var(--color-graphite-900);
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: var(--color-copper-500);
+    color: #fff;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-copper-500);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .container-page {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 1320px;
+    padding-inline: 20px;
+  }
+
+  @media (min-width: 768px) {
+    .container-page {
+      padding-inline: 40px;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .container-page {
+      padding-inline: 56px;
+    }
+  }
+
+  /* Тонкая техническая сетка — фирменный графический мотив */
+  .grid-technical {
+    background-image:
+      linear-gradient(to right, rgba(180, 188, 194, 0.16) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(180, 188, 194, 0.16) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+
+  .grid-technical-dark {
+    background-image:
+      linear-gradient(to right, rgba(180, 188, 194, 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(180, 188, 194, 0.07) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+
+  .label-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-copper-500);
+  }
+
+  .label-kicker::before {
+    content: '';
+    width: 28px;
+    height: 2px;
+    background: var(--color-copper-500);
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-steel-400) transparent;
+  }
+}
