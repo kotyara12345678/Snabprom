@@ -71,6 +71,9 @@ jobs:
         with:
           context: .
           push: false
+          # Без load образ остаётся только в кеше buildx, и docker run
+          # пытается скачать его из реестра
+          load: true
           tags: snabpromtechmontazh-landing:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -84,7 +87,7 @@ jobs:
           done
           curl -fsS http://localhost:8080/healthz
           curl -fsS http://localhost:8080/ | grep -qi "<!doctype html"
-          docker rm -f smoke
+          docker rm -f smoke || true
 
   deploy-placeholder:
     name: Deploy (placeholder)
