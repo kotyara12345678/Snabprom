@@ -1,7 +1,7 @@
 import type { ChatRequest, ChatResponse, ChatEndResponse } from '../types';
 
 /**
- * API-клиент AI-консультанта.
+ * API-клиент AI-консультанта (FastAPI backend, ключ только на сервере).
  *
  * Контракт с backend:
  *
@@ -9,6 +9,7 @@ import type { ChatRequest, ChatResponse, ChatEndResponse } from '../types';
  *     Content-Type: multipart/form-data
  *     поля: sessionId (string), content (string), file? (файл ≤ 10 МБ)
  *     200 -> { sessionId, reply: { content: string } }
+ *     4xx/5xx -> { message?: string }  -> показывается пользователю
  *
  *  2) POST {VITE_AI_CHAT_URL || '/api/chat'}/session  (JSON: { sessionId })
  *     200 -> { ok: true }   — завершение диалога и очистка контекста на сервере
@@ -19,12 +20,17 @@ import type { ChatRequest, ChatResponse, ChatEndResponse } from '../types';
  */
 
 const BASE_URL = import.meta.env.VITE_AI_CHAT_URL ?? '/api/chat';
-const TIMEOUT_MS = 30_000;
+// Модель с reasoning может отвечать долго; лимит бэкенда — AI_TIMEOUT_SECONDS (110 с)
+const TIMEOUT_MS = 120_000;
 
 export class ChatNetworkError extends Error {
-  constructor(message: string) {
+  /** Честное сообщение, полученное от бэкенда ({ message }) */
+  readonly serverMessage?: string;
+
+  constructor(message: string, serverMessage?: string) {
     super(message);
     this.name = 'ChatNetworkError';
+    this.serverMessage = serverMessage;
   }
 }
 
@@ -48,7 +54,16 @@ export async function sendChatMessage(
       body: formData,
       signal: controller.signal,
     });
-    if (!response.ok) throw new ChatNetworkError('server');
+    if (!response.ok) {
+      let serverMessage: string | undefined;
+      try {
+        const data = (await response.json()) as { message?: string };
+        serverMessage = data?.message;
+      } catch {
+        /* тело не JSON — покажем общее сообщение */
+      }
+      throw new ChatNetworkError('server', serverMessage);
+    }
 
     const data = (await response.json()) as ChatResponse;
     if (!data?.reply?.content) throw new ChatNetworkError('server');
@@ -58,7 +73,7 @@ export async function sendChatMessage(
     // Отменён внешним сигналом (кнопкой «Стоп») — пробрасываем как есть
     if (outerSignal?.aborted) throw error;
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new ChatNetworkError('server');
+      throw new ChatNetworkError('timeout');
     }
     throw new ChatNetworkError('offline');
   } finally {
@@ -83,6 +98,10 @@ export async function endChatSession(sessionId: string): Promise<ChatEndResponse
 
 export function resolveChatErrorMessage(error: unknown): string {
   if (error instanceof ChatNetworkError) {
+    if (error.serverMessage) return error.serverMessage;
+    if (error.message === 'timeout') {
+      return 'Модель отвечает дольше обычного. Попробуйте отправить сообщение ещё раз или оставьте заявку.';
+    }
     return error.message === 'offline'
       ? 'Нет связи с сервером консультанта. Проверьте подключение и повторите попытку.'
       : 'Сервис консультанта временно недоступен. Попробуйте позже или оставьте заявку — мы ответим лично.';

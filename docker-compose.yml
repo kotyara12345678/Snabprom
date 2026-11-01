@@ -1,4 +1,22 @@
 services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: snabpromtechmontazh-backend:latest
+    container_name: snabprom-backend
+    env_file:
+      - .env
+    volumes:
+      - backend-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
   landing:
     build:
       context: .
@@ -7,9 +25,15 @@ services:
     container_name: snabprom-landing
     ports:
       - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
       interval: 30s
       timeout: 3s
       retries: 3
+
+volumes:
+  backend-data:

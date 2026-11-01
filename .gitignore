@@ -12,6 +12,19 @@ dist
 dist-ssr
 *.local
 
+# Секреты окружения (ключ AI живёт только здесь и в env-файлах Docker)
+.env
+.env.*
+!.env.example
+
+# Python / backend
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+backend/data/
+*.db
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

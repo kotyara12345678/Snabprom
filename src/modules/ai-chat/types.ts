@@ -1,10 +1,12 @@
 /**
  * Публичный контракт AI-консультанта.
  *
- * Frontend никогда не генерирует ответы сам: единственный источник
- * ответов — backend (endpoint см. chatApi.ts). Здесь описаны только
- * типы запросов/ответов и состояния диалога.
+ * Ответы ассистента приходят ТОЛЬКО из chatApi (FastAPI backend вызывает
+ * LLM, см. api/chatApi.ts). История диалога хранится на сервере по sessionId.
+ * Здесь — типы запросов/ответов, состояния диалога и реэкспорт промптов.
  */
+
+export { GREETING_MESSAGE, QUICK_REPLIES } from './prompts';
 
 export type ChatRole = 'user' | 'assistant' | 'system';
 
@@ -25,7 +27,7 @@ export interface ChatMessage {
   readonly status?: DeliveryStatus;
 }
 
-/** Запрос диалога: POST multipart/form-data на /api/chat */
+/** Запрос диалога */
 export interface ChatRequest {
   /** Идентификатор сессии диалога (генерируется на клиенте, хранится в sessionStorage) */
   sessionId: string;
@@ -35,7 +37,7 @@ export interface ChatRequest {
   file?: File | null;
 }
 
-/** Ответ backend: единственное допустимое происхождение текста ассистента */
+/** Ответ клиента AI: единственный источник текста ассистента */
 export interface ChatResponse {
   sessionId: string;
   reply: {
@@ -43,7 +45,7 @@ export interface ChatResponse {
   };
 }
 
-/** Завершение диалога: DELETE/POST на /api/chat/session */
+/** Завершение диалога: сервер очищает историю по sessionId */
 export interface ChatEndResponse {
   ok: boolean;
 }
@@ -54,20 +56,5 @@ export type ChatTransportStatus =
   | 'awaiting-reply'
   | 'error'
   | 'ended';
-
-export const CHAT_ERRORS = {
-  offline: 'Нет связи с сервером консультанта. Проверьте подключение и повторите попытку.',
-  server: 'Сервис консультанта временно недоступен. Попробуйте позже или оставьте заявку — мы ответим лично.',
-} as const;
-
-export const GREETING_MESSAGE =
-  'Здравствуйте! Я виртуальный консультант ТОО «СнабПромТехМонтаж». Помогу разобраться с подбором промышленного оборудования и подготовить запрос на поставку. Расскажите, что вас интересует.';
-
-export const QUICK_REPLIES: readonly string[] = [
-  'Подобрать оборудование',
-  'Запросить комплектующие',
-  'Рассчитать поставку',
-  'Отправить техническую спецификацию',
-];
 
 export const MAX_CHAT_FILE_SIZE = 10 * 1024 * 1024;

@@ -1,7 +1,8 @@
 # ТОО «СнабПромТехМонтаж» — корпоративный лендинг
 
 Лендинг компании по поставкам промышленного оборудования из Китая.
-Стек: **React 19 + TypeScript + Vite + Tailwind CSS v4 + Framer Motion + Lucide**.
+Стек: **React 19 + TypeScript + Vite + Tailwind CSS v4 + Framer Motion + Lucide**,
+бэкенд: **Python 3.13 + FastAPI + uvicorn**.
 
 ## Структура
 
@@ -15,49 +16,72 @@ src/
 ├── lib/
 │   ├── validation.ts              # Валидация формы: имя, телефон, email, направление, описание, файл (тип/размер)
 │   └── api/requestsApi.ts         # Клиент отправки заявки (multipart) + честные состояния ошибки
-└── modules/ai-chat/               # AI-консультант
+└── modules/ai-chat/               # AI-консультант (frontend)
     ├── types.ts                   # Контракт сообщений/запросов/ответов, приветствие, быстрые варианты
     ├── api/chatApi.ts             # Клиент backend-эндпоинта (MultipartFile -> JSON-ответ); без фейковых ответов
     ├── useChat.ts                 # Состояние диалога: отправка, ожидание, ошибка+retry, завершение/рестарт
+    ├── prompts/                   # greeting.md, quick-replies.md (подключаются через Vite ?raw)
     └── components/                # AIChatWidget (кнопка+окно), MessageList, ChatInput
+
+backend/
+├── app/
+│   ├── main.py                    # FastAPI-приложение, CORS, /healthz
+│   ├── config.py                  # Переменные окружения + загрузка системного промпта
+│   ├── prompts/system-prompt.md   # Системный промпт консультанта (.md)
+│   ├── routers/
+│   │   ├── chat.py                # POST /api/chat, POST /api/chat/session
+│   │   └── requests.py            # POST /api/requests (SQLite + uploads/)
+│   └── services/
+│       ├── ai.py                  # Клиент polza.ai (OpenAI-совместимый /chat/completions)
+│       ├── sessions.py            # История диалогов в памяти (по sessionId, TTL 30 мин)
+│       └── extraction/            # Разбор вложений: PDF (PyMuPDF), DOCX (python-docx),
+│                                  #   XLSX/XLS (openpyxl/xlrd), TXT, изображения -> data:URL
+├── Dockerfile                     # python:3.13-slim + uvicorn (не.root)
+└── requirements.txt
 ```
 
 ## Запуск
 
 ```bash
-# Разработка
+# --- Frontend ---
 npm install
-npm run dev            # http://localhost:5173
-
-# Продакшн-сборка
+npm run dev            # http://localhost:5173 (проксирует /api -> localhost:8000)
 npm run build          # dist/
-npm run preview
 
-# Docker (рекомендуемый способ)
+# --- Backend (локально) ---
+python -m venv backend/.venv
+backend/.venv/Scripts/pip install -r backend/requirements.txt   # Linux/macOS: backend/.venv/bin/pip
+set -a && source .env && set +a                                 # ключ AI
+uvicorn app.main:app --reload --port 8000                       # из каталога backend/
+
+# --- Docker (рекомендуемый способ) ---
 docker compose up --build
-# => http://localhost:8080
+# => http://localhost:8080  (nginx проксирует /api/ на backend:8000)
 ```
 
-Контейнер раздаёт статику через nginx, отдаёт `/healthz` для healthcheck и
-фолбэчит SPA-роутинг на `index.html`.
+Ключ AI (`AI_API_KEY`) живёт **только** в `.env` (не коммитится, не попадает
+в образ frontend, не уходит в браузер).
 
-## Конфигурация backend-эндпоинтов
+## Конфигурация
 
-Frontend принципиально **не имитирует** отправку заявок и ответы AI. Эндпоинты
-настраиваются через переменные окружения (Vite):
+См. `.env.example`:
 
-| Переменная              | По умолчанию   | Назначение                                  |
-| ----------------------- | -------------- | ------------------------------------------- |
-| `VITE_REQUESTS_API_URL` | `/api/requests`| Приём заявки (multipart/form-data)          |
-| `VITE_AI_CHAT_URL`      | `/api/chat`    | Ответы AI-консультанта (multipart -> JSON)  |
+| Переменная               | По умолчанию                    | Назначение                                |
+| ------------------------ | ------------------------------- | ----------------------------------------- |
+| `AI_API_KEY`             | — (обязательно)                 | Ключ polza.ai для backend                 |
+| `AI_BASE_URL`            | `https://polza.ai/api/v1`       | Base URL OpenAI-совместимого API           |
+| `AI_MODEL`               | `openai/gpt-6-luna`             | Модель                                    |
+| `AI_TIMEOUT_SECONDS`     | `110`                           | Таймаут вызова модели                     |
+| `VITE_REQUESTS_API_URL`  | `/api/requests`                 | Приём заявки (multipart/form-data)        |
+| `VITE_AI_CHAT_URL`       | `/api/chat`                     | Ответы AI-консультанта (multipart -> JSON) |
 
 ### Контракт формы заявки
 
 ```
 POST {VITE_REQUESTS_API_URL}   Content-Type: multipart/form-data
-поля: name, company, phone, email, direction, message, file? (PDF/DOCX/XLSX/изображения, ≤10 МБ)
-2xx        -> ok
-4xx/5xx    -> { message?: string }  -> показывается в интерфейсе
+поля: name, company, phone, email, direction, message, file? (PDF/DOC/DOCX/XLS/XLSX/изображения, ≤10 МБ)
+2xx        -> { ok: true }      (сохраняется в SQLite + файл в uploads/)
+4xx/5xx    -> { message }       -> показывается в интерфейсе
 Нет ответа -> честное сообщение «Сервер приёма заявок недоступен» + контакты
 ```
 
@@ -65,15 +89,18 @@ POST {VITE_REQUESTS_API_URL}   Content-Type: multipart/form-data
 
 ```
 POST {VITE_AI_CHAT_URL}          multipart: sessionId, content, file?
-  200 -> { sessionId, reply: { content: string } }     # единственный источник текста ассистента
+  200 -> { sessionId, reply: { content: string } }   # единственный источник текста ассистента
+  4xx/5xx -> { message }         # честная причина (файл не прочитан, модель недоступна…)
 
 POST {VITE_AI_CHAT_URL}/session  JSON: { sessionId }
-  200 -> { ok: true }            # завершение диалога, очистка контекста на сервере
+  200 -> { ok: true }            # завершение диалога, очистка истории на сервере
 ```
 
-Клиент генерирует `sessionId` (sessionStorage), показывает индикатор набора,
-поддерживает повтор при ошибке и вложения ≤10 МБ. Готовых «ответов AI» на
-клиенте нет — до подключения backend виджет показывает честное состояние ошибки.
+Backend разбирает вложения **до** отправки модели: PDF/DOCX/XLSX/XLS/TXT → текст,
+изображения → `data:URL` (vision). История диалога хранится по `sessionId`
+в памяти процесса (TTL 30 минут). Ключ модели и системный промпт
+(`backend/app/prompts/system-prompt.md`) — только на сервере.
+Готовых «ответов AI» на клиенте нет: при ошибке показывается честное сообщение.
 
 ## CI/CD
 

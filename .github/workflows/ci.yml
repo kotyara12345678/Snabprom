@@ -34,6 +34,28 @@ jobs:
           path: dist
           retention-days: 7
 
+  backend:
+    name: Backend (FastAPI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Import app (проверка конфигурации и импортов)
+        working-directory: backend
+        run: python -c "import app.main; print('app imported')"
+
+      - name: Build backend image
+        run: docker build -t snabpromtechmontazh-backend:ci backend
+
   docker:
     name: Docker build & scan
     runs-on: ubuntu-latest
@@ -67,12 +89,13 @@ jobs:
   deploy-placeholder:
     name: Deploy (placeholder)
     runs-on: ubuntu-latest
-    needs: docker
+    needs: [docker, backend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Deployment note
         run: |
           echo "Здесь подключается деплой на целевой сервер/реестр:"
           echo "  - docker push <registry>/snabpromtechmontazh-landing:${{ github.sha }}"
+          echo "  - docker push <registry>/snabpromtechmontazh-backend:${{ github.sha }}"
           echo "  - ssh deploy 'docker compose pull && docker compose up -d'"
           echo "Заполните шаги под ваш контур после выбора хостинга."
